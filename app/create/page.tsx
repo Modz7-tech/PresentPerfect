@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Check, ImagePlus, Link2, Music2, Sparkles, X } from 'lucide-react';
 import { THEME_PRESETS } from '@/components/presentation/SafeThemePresets';
 import type { BackgroundAudio, GiftData, MomentMusic, MomentPhoto, ThemeId } from '@/types/gift';
@@ -89,6 +90,7 @@ async function resizeImage(file: File): Promise<MomentPhoto> {
 }
 
 export default function CreatePage() {
+  const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selected, setSelected] = useState<ThemeId>('candy-collage');
   const [recipient, setRecipient] = useState('');
@@ -248,12 +250,22 @@ export default function CreatePage() {
         body: JSON.stringify(gift),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Could not save the gift.');
-      setSavedId(result.giftId);
-      setStep(3);
+
+      if (!response.ok) throw new Error(result.error || 'Failed to create gift');
+
+      const giftId = result.id || result.giftId;
+      if (giftId) {
+        setSavedId(giftId);
+        router.push(`/g/${giftId}`);
+      } else {
+        console.error('Gift created, but ID was missing in response:', result);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save the gift.');
-    } finally { setBusy(false); }
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'The gift could not be created.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
