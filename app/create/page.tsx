@@ -2,7 +2,6 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Check, ImagePlus, Link2, Music2, Sparkles, X } from 'lucide-react';
 import { THEME_PRESETS } from '@/components/presentation/SafeThemePresets';
 import type { BackgroundAudio, GiftData, MomentMusic, MomentPhoto, ThemeId } from '@/types/gift';
@@ -90,7 +89,6 @@ async function resizeImage(file: File): Promise<MomentPhoto> {
 }
 
 export default function CreatePage() {
-  const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selected, setSelected] = useState<ThemeId>('candy-collage');
   const [recipient, setRecipient] = useState('');
@@ -241,7 +239,8 @@ export default function CreatePage() {
   };
 
   const saveGift = async () => {
-    setBusy(true); setError('');
+    setBusy(true); 
+    setError('');
     try {
       const gift = buildGift();
       const response = await fetch('/api/gifts', {
@@ -250,21 +249,24 @@ export default function CreatePage() {
         body: JSON.stringify(gift),
       });
       const result = await response.json();
+      console.log('API /api/gifts response:', result);
 
-      if (!response.ok) throw new Error(result.error || 'Failed to create gift');
+      if (!response.ok) throw new Error(result.error || 'Could not save the gift.');
 
-      const giftId = result.id || result.giftId;
-      if (giftId) {
-        setSavedId(giftId);
-        router.push(`/g/${giftId}`);
-      } else {
-        console.error('Gift created, but ID was missing in response:', result);
+      // Capture whichever ID property the API returned
+      const createdId = result.giftId || result.id || result._id;
+
+      if (!createdId) {
+        throw new Error('Gift was saved, but no ID was returned from the server.');
       }
+
+      setSavedId(createdId);
+      setStep(3);
     } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : 'The gift could not be created.');
-    } finally {
-      setBusy(false);
+      console.error('Error saving gift:', err);
+      setError(err instanceof Error ? err.message : 'Could not save the gift.');
+    } finally { 
+      setBusy(false); 
     }
   };
 
