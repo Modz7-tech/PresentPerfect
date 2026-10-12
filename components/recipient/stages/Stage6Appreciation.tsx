@@ -1,0 +1,11 @@
+'use client';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { StageAppreciationContent } from '@/types/gift';
+import { usePresentation } from '../../presentation/ThemeProvider';
+
+export function Stage6Appreciation({ content, onNext }: { content: StageAppreciationContent; onNext: () => void }) {
+  const { headingClass, monoClass, handClass } = usePresentation();
+  const [lampOn, setLampOn] = useState(false);
+  return <section className="stage-six"><div className="quiet-mark">06</div><div className="appreciation-copy"><span className={monoClass}>A QUIET NOTE</span><motion.h1 className={headingClass} initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }}>{content.headline}</motion.h1>{content.paragraphs.map((p, i) => <motion.p key={i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .25 + i * .14 }}>{p}</motion.p>)}<div className="appreciation-sign"><span className={handClass}>{content.warmSignoff}</span><div className="sign-line" /></div><button className="artifact-action dark-action" onClick={onNext}><span>one last thing</span><span>→</span></button></div><div className={`love-lamp-scene ${lampOn ? 'lamp-is-on' : ''}`}><button type="button" className="love-lamp" onClick={() => setLampOn(v => !v)} aria-pressed={lampOn} aria-label={lampOn ? 'Turn the love lamp off' : 'Touch to turn on the love lamp'}><span className="lamp-top"/><span className="lamp-shade"><i/><i/><i/></span><span className="lamp-base"/><span className="lamp-touch-cue">{lampOn ? 'GLOWING JUST FOR YOU' : 'TOUCH TO TURN ON'}</span></button><AnimatePresence>{lampOn && <motion.div className="lamp-love-note" initial={{ opacity: 0, y: 18, scale: .96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: .65 }}><span>✦ A NOTE IN THE LIGHT ✦</span><p>Some people make the world feel softer just by being in it. I hope you never forget how much light you bring, how much beauty there is in the way you see things, and how very loved you deserve to feel. This little glow is yours, whenever you need a reminder.</p><b>with so much warmth ♡</b></motion.div>}</AnimatePresence></div></section>;
+}
