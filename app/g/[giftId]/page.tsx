@@ -47,7 +47,7 @@ export default async function GiftPage({ params, searchParams }: GiftPageProps) 
   const { responseToken: _creatorOnlyToken, ...recipientSafeGift } = baseGift;
   const spotifyFromAudio = baseGift.presentation.audio?.src?.match(/open\.spotify\.com\/track\/([A-Za-z0-9]+)/i)?.[1];
   const safePresentation = spotifyFromAudio && !baseGift.presentation.spotifyFallback
-    ? { ...baseGift.presentation, audio: undefined, spotifyFallback: { provider: 'spotify' as const, trackId: spotifyFromAudio, title: baseGift.presentation.audio?.title || 'Spotify soundtrack', artist: baseGift.presentation.audio?.artist || 'Spotify', spotifyUrl: baseGift.presentation.audio.src } }
+    ? { ...baseGift.presentation, audio: undefined, spotifyFallback: { provider: 'spotify' as const, trackId: spotifyFromAudio, title: baseGift.presentation.audio?.title || 'Spotify soundtrack', artist: baseGift.presentation.audio?.artist || 'Spotify', spotifyUrl: baseGift.presentation.audio?.src || '' } }
     : { ...baseGift.presentation };
   const gift = {
     ...recipientSafeGift,
