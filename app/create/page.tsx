@@ -239,8 +239,7 @@ export default function CreatePage() {
   };
 
   const saveGift = async () => {
-    setBusy(true); 
-    setError('');
+    setBusy(true); setError('');
     try {
       const gift = buildGift();
       const response = await fetch('/api/gifts', {
@@ -249,25 +248,12 @@ export default function CreatePage() {
         body: JSON.stringify(gift),
       });
       const result = await response.json();
-      console.log('API /api/gifts response:', result);
-
       if (!response.ok) throw new Error(result.error || 'Could not save the gift.');
-
-      // Capture whichever ID property the API returned
-      const createdId = result.giftId || result.id || result._id;
-
-      if (!createdId) {
-        throw new Error('Gift was saved, but no ID was returned from the server.');
-      }
-
-      setSavedId(createdId);
+      setSavedId(result.giftId);
       setStep(3);
     } catch (err) {
-      console.error('Error saving gift:', err);
       setError(err instanceof Error ? err.message : 'Could not save the gift.');
-    } finally { 
-      setBusy(false); 
-    }
+    } finally { setBusy(false); }
   };
 
   return (

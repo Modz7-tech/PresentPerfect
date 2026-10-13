@@ -1,12 +1,6 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/create/page": "app/create/page.js",
-  "/g/[giftId]/constellation/page": "app/g/[giftId]/constellation/page.js",
-  "/g/[giftId]/page": "app/g/[giftId]/page.js",
   "/page": "app/page.js",
-  "/api/assets/route": "app/api/assets/route.js",
-  "/api/gifts/[giftId]/responses/route": "app/api/gifts/[giftId]/responses/route.js",
-  "/api/gifts/[giftId]/route": "app/api/gifts/[giftId]/route.js",
+  "/create/page": "app/create/page.js",
   "/api/gifts/route": "app/api/gifts/route.js",
-  "/responses/[giftId]/page": "app/responses/[giftId]/page.js"
+  "/g/[giftId]/page": "app/g/[giftId]/page.js"
 }
