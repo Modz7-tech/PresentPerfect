@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import Link from 'next/link';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, ImagePlus, Link2, Music2, Sparkles, X } from 'lucide-react';
 import { THEME_PRESETS } from '@/components/presentation/SafeThemePresets';
-import type { BackgroundAudio, GiftData, MomentMusic, MomentPhoto, ThemeId } from '@/types/gift';
+import type { GiftData, MomentMusic, MomentPhoto, ThemeId } from '@/types/gift';
 
 const FEATURED: { id: ThemeId; note: string; motion: string }[] = [
   { id: 'sunbeam-pop', note: 'bright / playful / hand-cut', motion: 'bouncing shapes + paper layers' },
@@ -27,30 +26,13 @@ const MESSAGE_SUGGESTIONS = [
 ];
 
 
-function isDirectAudioSource(value: string) {
-  const src = value.trim();
-  if (!src) return false;
-  if (/spotify\.com|youtube\.com|youtu\.be/i.test(src)) return false;
-  return src.startsWith('/uploads/') || /\.(mp3|wav|ogg|m4a|aac|webm)(?:[?#].*)?$/i.test(src);
-}
-
-function parseSpotify(value: string): MomentMusic | undefined {
+// Accept only common YouTube video URL formats.
+function parseYouTube(value: string): MomentMusic | undefined {
   const input = value.trim();
   if (!input) return undefined;
-
-  // Spotify track URL / URI.
-  const spotifyMatch = input.match(/spotify\.com\/(?:embed\/)?(?:[^/]+\/)?track\/([A-Za-z0-9]+)/i);
-  const spotifyUri = input.match(/^spotify:track:([A-Za-z0-9]+)$/i);
-  const spotifyId = spotifyMatch?.[1] || spotifyUri?.[1];
-  if (spotifyId) {
-    const canonical = `https://open.spotify.com/track/${spotifyId}`;
-    return { provider: 'spotify', trackId: spotifyId, title: 'Selected Spotify track', artist: 'Spotify', spotifyUrl: canonical };
-  }
-
-  // YouTube watch, youtu.be, shorts, live, and embed links.
   try {
     const url = new URL(input);
-    const host = url.hostname.replace(/^www\./, '').replace(/^m\./, '');
+    const host = url.hostname.toLowerCase().replace(/^(www|m)\./, '');
     let videoId = '';
     if (host === 'youtu.be') videoId = url.pathname.split('/').filter(Boolean)[0] || '';
     else if (host === 'youtube.com' || host === 'music.youtube.com') {
@@ -60,7 +42,9 @@ function parseSpotify(value: string): MomentMusic | undefined {
     if (/^[A-Za-z0-9_-]{6,}$/.test(videoId)) {
       return { provider: 'youtube', trackId: videoId, title: 'YouTube soundtrack', artist: 'YouTube', spotifyUrl: `https://www.youtube.com/watch?v=${videoId}` };
     }
-  } catch { /* Invalid or incomplete URL; show validation feedback. */ }
+  } catch {
+    // Invalid URLs are explained inline in the creator.
+  }
   return undefined;
 }
 
@@ -94,10 +78,7 @@ export default function CreatePage() {
   const [recipient, setRecipient] = useState('');
   const [message, setMessage] = useState('');
   const [photos, setPhotos] = useState<MomentPhoto[]>([]);
-  const [spotifyUrl, setSpotifyUrl] = useState('');
-  const [audioUrl, setAudioUrl] = useState('');
-  const [audioTitle, setAudioTitle] = useState('');
-  const [audioBusy, setAudioBusy] = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState('');
   const [syncPhotos, setSyncPhotos] = useState(true);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [songTitle, setSongTitle] = useState('');
@@ -111,38 +92,18 @@ export default function CreatePage() {
   const theme = useMemo(() => THEME_PRESETS[selected], [selected]);
   const chosen = FEATURED.find(x => x.id === selected)!;
   const music = useMemo(() => {
-    const parsed = parseSpotify(spotifyUrl.trim());
+    const parsed = parseYouTube(youtubeUrl);
     if (!parsed) return undefined;
     return { ...parsed, title: songTitle.trim() || parsed.title, artist: songArtist.trim() || parsed.artist };
-  }, [spotifyUrl, songTitle, songArtist]);
+  }, [youtubeUrl, songTitle, songArtist]);
+
+  // Reset scroll position whenever the creator advances or goes back a step.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  }, [step]);
 
   const useSuggestion = (text: string) => setMessage(text);
 
-  const addAudioFile = async (file: File | undefined) => {
-    if (!file) return;
-    if (!file.type.startsWith('audio/') && !/\.(mp3|wav|ogg|m4a|aac|webm)$/i.test(file.name)) {
-      setError('Please choose a direct audio file such as MP3, WAV, OGG or M4A.');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setError('Keep the audio file under 10 MB.');
-      return;
-    }
-    setAudioBusy(true); setError('');
-    try {
-      const form = new FormData();
-      form.append('file', file);
-      form.append('giftId', draftId);
-      form.append('kind', 'audio');
-      const response = await fetch('/api/assets', { method: 'POST', body: form });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Upload failed');
-      setAudioUrl(result.url);
-      setAudioTitle(file.name.replace(/\.[^.]+$/, ''));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'The audio file could not be uploaded.');
-    } finally { setAudioBusy(false); }
-  };
   const reorderPhoto = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0 || from >= photos.length || to >= photos.length) return;
     setPhotos(current => { const next = [...current]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); return next; });
@@ -232,7 +193,7 @@ export default function CreatePage() {
       },
       presentation: {
         themeId: selected, templateId: selected, fontPairing: 'editorial-mix', pacing: 'standard',
-        audio: isDirectAudioSource(audioUrl) ? ({ src: audioUrl.trim(), title: audioTitle.trim() || 'Background soundtrack', artist: songArtist.trim() || undefined, volume: 0.55, loop: true, sourceType: audioUrl.startsWith('/uploads/') ? 'uploaded-file' : 'direct-url' } satisfies BackgroundAudio) : undefined,
+        // New gifts use YouTube soundtrack links only; legacy audio fields remain unset.
         spotifyFallback: music, syncPhotosToMusic: syncPhotos,
       },
     };
@@ -263,7 +224,15 @@ export default function CreatePage() {
           <div><p className="font-mono text-[10px] tracking-[.25em] uppercase text-black/45">A Little Something / Creator Studio</p><h1 className="font-serif text-[clamp(2.7rem,6vw,6.5rem)] leading-[.82] tracking-[-.06em] mt-4">Make the moment.<br/><i>Make it yours.</i></h1></div>
         </header>
 
-        <div className="creator-progress"><span className={step >= 1 ? 'active' : ''}>01 / WORLD</span><span className={step >= 2 ? 'active' : ''}>02 / MOMENT</span><span className={step >= 3 ? 'active' : ''}>03 / PREVIEW</span></div>
+        <div className="creator-progress-wrap" aria-label={`Step ${step} of 3`}>
+          <div className="creator-progress" aria-label="Creation steps">
+            <span className={step >= 1 ? 'active' : ''}><b>01</b><span>Choose a look</span></span>
+            <span className={step >= 2 ? 'active' : ''}><b>02</b><span>Add your message</span></span>
+            <span className={step >= 3 ? 'active' : ''}><b>03</b><span>Create link</span></span>
+          </div>
+          <div className="creator-progress-track"><span style={{ width: `${(step / 3) * 100}%` }} /></div>
+          <p className="creator-step-help">Step {step} of 3 · Your choices are kept as you move between steps.</p>
+        </div>
 
         {step === 1 && <section className="creator-step-grid">
           <div>
@@ -278,27 +247,41 @@ export default function CreatePage() {
           </div>
           <aside className="creator-side-panel" style={{'--preview-bg':theme.colors[0],'--preview-accent':theme.colors[2],'--preview-accent2':theme.colors[1]} as React.CSSProperties}>
             <div className={`creator-artifact-preview cinematic-preview preview-${selected}`}><div className="preview-film"/><div className="creator-orbit a"/><div className="creator-orbit b"/><div className="creator-core">✦</div><div className="preview-radial"/><div className="preview-caption"><span>LIVE WORLD / {String(FEATURED.findIndex(x=>x.id===selected)+1).padStart(2,'0')}</span><span>{theme.name}</span></div><div className="preview-title"><p>{theme.tagline}</p><h2>A little<br/><i>something.</i></h2><span>{chosen.motion}</span></div><div className="preview-microgrid"/></div>
-            <div className="creator-side-copy"><Sparkles size={17}/><h3>{theme.name}</h3><p>{theme.tagline}</p><label className="creator-field"><span>Recipient name / nickname</span><input value={recipient} onChange={e=>setRecipient(e.target.value)} placeholder="their name" /></label><button className="creator-primary" onClick={()=>setStep(2)}>Build the moment <ArrowRight size={15}/></button></div>
+            <div className="creator-side-copy"><Sparkles size={17}/><h3>{theme.name}</h3><p>{theme.tagline}</p><label className="creator-field"><span>Recipient name or nickname</span><input value={recipient} onChange={e=>setRecipient(e.target.value)} placeholder="e.g. Alex" aria-label="Recipient name or nickname" /><small className="field-help">This name appears inside the gift. You can leave it blank for now.</small></label><button className="creator-primary" onClick={()=>setStep(2)}>Next: add your message <ArrowRight size={15}/></button></div>
           </aside>
         </section>}
 
         {step === 2 && <section className="moment-builder">
           <div className="builder-main">
-            <button className="creator-back" onClick={()=>setStep(1)}><ArrowLeft size={14}/> back to world</button>
+            <button className="creator-back" onClick={()=>setStep(1)}><ArrowLeft size={14}/> Back: choose a look</button>
             <p className="creator-kicker">02 / THE MOMENT</p><h2 className="creator-title">Write something<br/><i>they'll keep.</i></h2>
             <div className="message-editor"><div className="editor-label"><span>YOUR NOTE</span><span>{message.length} / 1200</span></div><textarea maxLength={1200} value={message} onChange={e=>setMessage(e.target.value)} placeholder="Write it the way you would actually say it..." /><div className="suggestion-heading">Need a starting point?</div><div className="suggestion-row">{MESSAGE_SUGGESTIONS.map(s=><button key={s.label} onClick={()=>useSuggestion(s.text)}>{s.label}</button>)}</div></div>
 
-            <div className="builder-section"><div className="builder-section-title"><span>03 / PHOTO-MUSIC TIMELINE</span><small>optional · up to 4 · drag to reorder</small></div><label className="photo-drop"><ImagePlus size={22}/><span>{busy?'processing...':'Drop memories here or choose photos'}</span><small>JPG / PNG · compressed for the prototype</small><input type="file" accept="image/*" multiple onChange={e=>addPhotos(e.target.files)} disabled={busy || photos.length >= 4}/></label>{photos.length>0&&<div className="uploaded-photos">{photos.map((p,i)=><div key={p.id} className={`uploaded-photo ${dragIndex===i?'is-dragging':''}`} draggable onDragStart={()=>setDragIndex(i)} onDragOver={e=>e.preventDefault()} onDrop={()=>{ if(dragIndex!==null) reorderPhoto(dragIndex,i); setDragIndex(null); }} onDragEnd={()=>setDragIndex(null)}><span className="photo-order">0{i+1}</span><img src={p.url} alt={p.alt || `Memory ${i+1}`}/><button type="button" onClick={()=>setPhotos(ps=>ps.filter(x=>x.id!==p.id))}><X size={13}/></button></div>)}</div>}<label className="timeline-sync"><input type="checkbox" checked={syncPhotos} onChange={e=>setSyncPhotos(e.target.checked)}/><span><strong>Sync photos to fade dynamically while music plays.</strong><small>ON by default · photo progression follows the soundtrack when direct audio is available.</small></span></label></div>
+            <div className="builder-section"><div className="builder-section-title"><span>PHOTOS</span><small>Optional · up to 4</small></div><label className="photo-drop"><ImagePlus size={22}/><span>{busy?'processing...':'Drop memories here or choose photos'}</span><small>JPG / PNG · compressed for the prototype</small><input type="file" accept="image/*" multiple onChange={e=>addPhotos(e.target.files)} disabled={busy || photos.length >= 4}/></label>{photos.length>0&&<div className="uploaded-photos">{photos.map((p,i)=><div key={p.id} className={`uploaded-photo ${dragIndex===i?'is-dragging':''}`} draggable onDragStart={()=>setDragIndex(i)} onDragOver={e=>e.preventDefault()} onDrop={()=>{ if(dragIndex!==null) reorderPhoto(dragIndex,i); setDragIndex(null); }} onDragEnd={()=>setDragIndex(null)}><span className="photo-order">0{i+1}</span><img src={p.url} alt={p.alt || `Memory ${i+1}`}/><button type="button" onClick={()=>setPhotos(ps=>ps.filter(x=>x.id!==p.id))}><X size={13}/></button></div>)}</div>}<label className="timeline-sync"><input type="checkbox" checked={syncPhotos} onChange={e=>setSyncPhotos(e.target.checked)}/><span><strong>Sync photos to fade dynamically while music plays.</strong><small>ON by default · photo progression can follow the soundtrack.</small></span></label></div>
 
-            <div className="builder-section audio-section"><div className="builder-section-title"><span>04 / SOUNDTRACK</span><small>dual-mode audio</small></div><div className="dual-audio-grid"><div className="audio-mode-card primary"><div className="audio-mode-head"><Music2/><div><strong>Primary Background Audio (Highly Recommended)</strong><small>Direct MP3 / audio URL or upload</small></div></div><input value={audioUrl.startsWith('data:')?'':audioUrl} onChange={e=>setAudioUrl(e.target.value)} placeholder="https://example.com/song.mp3" /><label className="audio-upload"><span>{audioBusy?'loading audio…':'Upload .mp3 / audio file'}</span><input type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a" onChange={e=>addAudioFile(e.target.files?.[0])} disabled={audioBusy}/></label><input value={audioTitle} onChange={e=>setAudioTitle(e.target.value)} placeholder="Track title (optional)"/><p className="audio-guarantee">Direct audio plays from the recipient's explicit gift-box interaction. It is the browser-safe route for background playback; no web app can honestly guarantee autoplay in every browser/device configuration.</p></div><div className="audio-mode-card secondary"><div className="audio-mode-head"><Music2/><div><strong>YouTube or Spotify Link</strong><small>YouTube / Spotify link · compact recipient player</small></div></div><input value={spotifyUrl} onChange={e=>setSpotifyUrl(e.target.value)} placeholder="Paste a YouTube or Spotify song URL"/><div className="grid sm:grid-cols-2 gap-2"><input value={songTitle} onChange={e=>setSongTitle(e.target.value)} placeholder="Song title"/><input value={songArtist} onChange={e=>setSongArtist(e.target.value)} placeholder="Artist"/></div>{spotifyUrl && !music&&<p className="text-[11px] text-red-700">Paste a valid YouTube video or Spotify track URL.</p>}{music&&<div className="music-attached"><span>✓ Music link ready</span><strong>{music.title}</strong><small>{music.artist}</small></div>}</div></div><p className="music-note">YouTube starts muted in the background where autoplay is allowed. Tap the small CD icon to open its player and enable sound if the browser blocks autoplay. Spotify playback requires the recipient to use the Spotify embed controls; a pasted Spotify URL cannot be converted into a raw background audio stream.</p></div>
-            {error&&<p className="creator-error">{error}</p>}
-            <div className="builder-actions"><button className="creator-back" onClick={()=>setStep(1)}>← change world</button><button className="creator-secondary" onClick={()=>setStep(3)}>Continue to create link</button></div>
+            <div className="builder-section audio-section">
+              <div className="builder-section-title"><span>SOUNDTRACK</span><small>Optional · YouTube only</small></div>
+              <div className="audio-mode-card youtube-only-card">
+                <div className="audio-mode-head"><Music2/><div><strong>Add a YouTube song</strong><small>Paste a YouTube video, Shorts, live, or youtu.be link.</small></div></div>
+                <label className="creator-field">
+                  <span>YouTube URL</span>
+                  <input type="url" value={youtubeUrl} onChange={e=>{setYoutubeUrl(e.target.value); if (error) setError('');}} placeholder="https://www.youtube.com/watch?v=..." aria-label="YouTube song URL" aria-invalid={!!youtubeUrl.trim() && !music} />
+                  <small className="field-help">Only YouTube video links are supported here. Direct MP3/audio links won’t work.</small>
+                </label>
+                {youtubeUrl.trim() && !music && <p className="creator-error" role="alert">That doesn’t look like a valid YouTube video link. Paste a URL from youtube.com, music.youtube.com, or youtu.be.</p>}
+                <div className="grid sm:grid-cols-2 gap-2 mt-3"><input value={songTitle} onChange={e=>setSongTitle(e.target.value)} placeholder="Song title (optional)" aria-label="Song title"/><input value={songArtist} onChange={e=>setSongArtist(e.target.value)} placeholder="Artist (optional)" aria-label="Artist"/></div>
+                {music && <div className="music-attached" role="status"><span>✓ YouTube link ready</span><strong>{music.title}</strong><small>{music.artist}</small></div>}
+              </div>
+              <p className="music-note">The recipient may need to tap the music control before sound starts. Browsers can block autoplay, so playback cannot be guaranteed to start automatically on every device.</p>
+            </div>
+            {error&&<p className="creator-error" role="alert">{error}</p>}
+            <div className="builder-actions"><button className="creator-back" onClick={()=>setStep(1)}>← Back: choose a look</button><button className="creator-primary" onClick={()=>{ if (youtubeUrl.trim() && !music) { setError("Please enter a valid YouTube URL, or clear the field to continue without music."); return; } setError(""); setStep(3); }}>Next: preview & create link <ArrowRight size={15}/></button></div>
           </div>
 
           <aside className="live-moment-preview"><div className="preview-stamp">LIVE RECIPIENT PREVIEW</div><div className="preview-paper" style={{'--preview-bg':theme.colors[0]} as React.CSSProperties}><div className="preview-scribble">for {recipient || 'someone special'} ↗</div><h3 className="font-serif text-4xl leading-none">{message ? 'Something I wanted to say.' : 'Your words will live here.'}</h3><p className="preview-message">{message || 'Start writing on the left. This preview changes as you create.'}</p>{photos.length>0&&<div className="preview-photo-stack">{photos.slice(0,3).map((p,i)=><img key={p.id} src={p.url} style={{transform:`rotate(${i%2?-4+i*2:3-i}deg) translateY(${i*8}px)`}} alt=""/>)}</div>}{music&&<div className="preview-track"><Music2 size={13}/><span>{music.title} · {music.artist}</span><span>♪</span></div>}</div></aside>
         </section>}
 
-        {step === 3 && <section className="final-preview"><div><button className="creator-back" onClick={()=>setStep(2)}><ArrowLeft size={14}/> edit moment</button><p className="creator-kicker">03 / READY</p><h2 className="creator-title">It looks like<br/><i>a little world.</i></h2><p className="final-copy">{recipient || 'Your recipient'} will enter the {theme.name} world, discover your note, see the photos you selected, and meet the soundtrack after their first tap.</p><div className="final-actions"><button className="creator-primary" onClick={saveGift} disabled={busy || !!savedId}>{savedId ? 'Gift link created' : busy ? 'Creating your gift…' : 'Create gift link'} <Sparkles size={15}/></button></div>{savedId&&<div className="created-link"><span>SHAREABLE RECIPIENT LINK</span><code id="recipient-share-url">{typeof window !== 'undefined' ? `${window.location.origin}/g/${savedId}` : `/g/${savedId}`}</code><button type="button" className="creator-secondary" onClick={() => { const url = `${window.location.origin}/g/${savedId}`; void navigator.clipboard.writeText(url); }}><Link2 size={14}/> Copy recipient link</button><small>Send this link directly to the recipient. The creator studio does not open the recipient experience, so you can keep the reveal a surprise. Test the link only if you explicitly choose to; the recipient should be the first to experience the gift.</small><a className="response-room-link" href={`/responses/${savedId}?token=${responseToken}`} target="_blank" rel="noreferrer">Private personality answers →</a></div>}</div><div className="final-artifact" style={{'--preview-bg':theme.colors[0],'--preview-accent':theme.colors[2]} as React.CSSProperties}><div className="final-orbit"/><div className="final-star">✦</div><p>FOR</p><h3>{recipient || 'someone special'}</h3><span>{theme.name}</span></div></section>}
+        {step === 3 && <section className="final-preview"><div><button className="creator-back" onClick={()=>setStep(2)}><ArrowLeft size={14}/> Back: edit message</button><p className="creator-kicker">03 / READY</p><h2 className="creator-title">It looks like<br/><i>a little world.</i></h2><p className="final-copy">{recipient || 'Your recipient'} will enter the {theme.name} world, discover your note, see the photos you selected, and meet the soundtrack after their first tap.</p><div className="final-actions"><button className="creator-primary" onClick={saveGift} disabled={busy || !!savedId}>{savedId ? 'Gift link created' : busy ? 'Creating your gift…' : 'Create gift link'} <Sparkles size={15}/></button></div>{savedId&&<div className="created-link"><span>SHAREABLE RECIPIENT LINK</span><code id="recipient-share-url">{typeof window !== 'undefined' ? `${window.location.origin}/g/${savedId}` : `/g/${savedId}`}</code><button type="button" className="creator-secondary" onClick={() => { const url = `${window.location.origin}/g/${savedId}`; void navigator.clipboard.writeText(url); }}><Link2 size={14}/> Copy recipient link</button><small>Send this link directly to the recipient. The creator studio does not open the recipient experience, so you can keep the reveal a surprise. Test the link only if you explicitly choose to; the recipient should be the first to experience the gift.</small><a className="response-room-link" href={`/responses/${savedId}?token=${responseToken}`} target="_blank" rel="noreferrer">Private personality answers →</a></div>}</div><div className="final-artifact" style={{'--preview-bg':theme.colors[0],'--preview-accent':theme.colors[2]} as React.CSSProperties}><div className="final-orbit"/><div className="final-star">✦</div><p>FOR</p><h3>{recipient || 'someone special'}</h3><span>{theme.name}</span></div></section>}
       </div>
     </main>
   );

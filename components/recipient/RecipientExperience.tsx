@@ -1,17 +1,21 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GiftData } from '@/types/gift';
 import { ThemeProvider } from '../presentation/ThemeProvider';
 import { StageNavigation } from './StageNavigation';
 import { Stage1Invitation } from './stages/Stage1Invitation';
-import { Stage2Introduction } from './stages/Stage2Introduction';
-import { Stage3Playful, PersonalityAnswer } from './stages/Stage3Playful';
-import { Stage4Moments } from './stages/Stage4Moments';
-import { Stage5Realization } from './stages/Stage5Realization';
-import { Stage6Appreciation } from './stages/Stage6Appreciation';
-import { Stage7Ending } from './stages/Stage7Ending';
+import type { PersonalityAnswer } from './stages/Stage3Playful';
+
+// Load later chapters only when needed so the recipient's opening screen compiles sooner.
+const Stage2Introduction = dynamic(() => import('./stages/Stage2Introduction').then(m => m.Stage2Introduction));
+const Stage3Playful = dynamic(() => import('./stages/Stage3Playful').then(m => m.Stage3Playful));
+const Stage4Moments = dynamic(() => import('./stages/Stage4Moments').then(m => m.Stage4Moments));
+const Stage5Realization = dynamic(() => import('./stages/Stage5Realization').then(m => m.Stage5Realization));
+const Stage6Appreciation = dynamic(() => import('./stages/Stage6Appreciation').then(m => m.Stage6Appreciation));
+const Stage7Ending = dynamic(() => import('./stages/Stage7Ending').then(m => m.Stage7Ending));
 import { PersistentMusic } from './PersistentMusic';
 
 interface RecipientExperienceProps { gift: GiftData; }
@@ -105,6 +109,12 @@ export function RecipientExperience({ gift }: RecipientExperienceProps) {
   const totalStages = 7;
   const { content, presentation } = activeGift;
 
+  // Keep each new recipient chapter in view instead of leaving the visitor at the previous scroll position.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [currentStage]);
 
   // The recipient is server-backed. Never replace the server gift with creator-browser localStorage.
 
