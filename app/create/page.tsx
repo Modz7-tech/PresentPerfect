@@ -116,19 +116,11 @@ export default function CreatePage() {
     if (!incoming.length) return;
     setBusy(true);
     try {
+      // Keep the compressed data URL in the gift itself. This avoids relying on
+      // /api/assets being present or on the host filesystem serving uploaded files.
+      // resizeImage already caps dimensions and JPEG quality to keep payloads modest.
       const processed = await Promise.all(incoming.map(resizeImage));
-      const uploaded = await Promise.all(processed.map(async (photo, index) => {
-        const blob = await fetch(photo.url).then(r => r.blob());
-        const form = new FormData();
-        form.append('file', blob, incoming[index].name.replace(/\.[^.]+$/, '.jpg'));
-        form.append('giftId', draftId);
-        form.append('kind', 'image');
-        const response = await fetch('/api/assets', { method: 'POST', body: form });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Photo upload failed');
-        return { ...photo, url: result.url };
-      }));
-      setPhotos(current => [...current, ...uploaded].slice(0, 4));
+      setPhotos(current => [...current, ...processed].slice(0, 4));
     } catch {
       setError('One of the images could not be processed. Try a smaller image.');
     } finally { setBusy(false); }
