@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { notFound } from 'next/navigation';
 import { getGiftById } from '@/data/mockGifts';
@@ -12,31 +13,61 @@ interface GiftPageProps {
   searchParams: { template?: string; name?: string };
 }
 
-export async function generateMetadata({ params }: GiftPageProps): Promise<Metadata> {
-  const gift = (await getStoredGift(params.giftId)) || getGiftById(params.giftId);
+export async function generateMetadata({
+  params,
+}: GiftPageProps): Promise<Metadata> {
+  const gift =
+    (await getStoredGift(params.giftId)) || getGiftById(params.giftId);
+
   if (!gift) return { title: 'A Little Something' };
-  return { title: 'A Little Something', description: 'A personal digital gift experience.', robots: { index: false, follow: false } };
+
+  return {
+    title: 'A Little Something',
+    description: 'A personal digital gift experience.',
+    robots: { index: false, follow: false },
+  };
 }
 
-export default async function GiftPage({ params, searchParams }: GiftPageProps) {
-  const baseGift = (await getStoredGift(params.giftId)) || getGiftById(params.giftId);
+export default async function GiftPage({
+  params,
+  searchParams,
+}: GiftPageProps) {
+  const baseGift =
+    (await getStoredGift(params.giftId)) || getGiftById(params.giftId);
+
   if (!baseGift) notFound();
 
-  const requestedTemplate = searchParams?.template as ThemeId | undefined;
-  const selectedTheme = requestedTemplate && THEME_PRESETS[requestedTemplate] ? requestedTemplate : baseGift.presentation.themeId;
+  // The saved gift determines the template; URL parameters cannot override it.
+  const savedTheme =
+    baseGift.presentation.themeId || baseGift.presentation.templateId;
+
+  const selectedTheme =
+    savedTheme && THEME_PRESETS[savedTheme as ThemeId]
+      ? (savedTheme as ThemeId)
+      : 'candy-collage';
+
   const selectedName = searchParams?.name?.trim();
 
-  // The prototype content contains a sample name in multiple places (title,
-  // attribution, birthday headline, etc.). Replace that sample name across
-  // the entire content tree so the creator's nickname follows the recipient
-  // through every stage rather than only changing content.recipient.name.
+  // Replace the prototype name throughout the content tree when requested.
   const replaceName = (value: unknown): unknown => {
     if (!selectedName) return value;
-    if (typeof value === 'string') return value.replace(/Alex/g, selectedName);
-    if (Array.isArray(value)) return value.map(replaceName);
-    if (value && typeof value === 'object') {
-      return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, child]) => [key, replaceName(child)]));
+
+    if (typeof value === 'string') {
+      return value.replace(/Alex/g, selectedName);
     }
+
+    if (Array.isArray(value)) {
+      return value.map(replaceName);
+    }
+
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(
+          ([key, child]) => [key, replaceName(child)],
+        ),
+      );
+    }
+
     return value;
   };
 
@@ -44,14 +75,18 @@ export default async function GiftPage({ params, searchParams }: GiftPageProps) 
     ? (replaceName(baseGift.content) as typeof baseGift.content)
     : baseGift.content;
 
+  // Never expose the creator-only response token to the recipient.
   const { responseToken: _creatorOnlyToken, ...recipientSafeGift } = baseGift;
-  const spotifyFromAudio = baseGift.presentation.audio?.src?.match(/open\.spotify\.com\/track\/([A-Za-z0-9]+)/i)?.[1];
-const safePresentation = spotifyFromAudio && !baseGift.presentation.spotifyFallback
-  ? { ...baseGift.presentation, audio: undefined, spotifyFallback: { provider: 'spotify' as const, trackId: spotifyFromAudio, title: baseGift.presentation.audio?.title || 'Spotify soundtrack', artist: baseGift.presentation.audio?.artist || 'Spotify', spotifyUrl: baseGift.presentation.audio?.src || '' } }
-  : { ...baseGift.presentation };
+
+  // Preserve the saved presentation, including YouTube-related settings.
+  // Do not convert legacy audio URLs into Spotify fallback data.
   const gift = {
     ...recipientSafeGift,
-    presentation: { ...safePresentation, themeId: selectedTheme, templateId: selectedTheme },
+    presentation: {
+      ...baseGift.presentation,
+      themeId: selectedTheme,
+      templateId: selectedTheme,
+    },
     content: personalizedContent,
   };
 
